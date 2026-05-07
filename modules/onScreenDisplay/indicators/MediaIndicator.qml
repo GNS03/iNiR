@@ -12,15 +12,6 @@ Item {
     property bool isPlaying: MprisController.isPlaying
     readonly property string effectiveArtUrl: MprisController.isYtMusicActive ? YtMusic.currentThumbnail : (track?.artUrl ?? "")
 
-    MediaArtworkResolver {
-        id: artworkResolver
-        sourceUrl: root.effectiveArtUrl
-        title: root.track?.title ?? ""
-        artist: root.track?.artist ?? ""
-        album: root.track?.album ?? ""
-        cacheDirectory: Directories.coverArt
-    }
-
     implicitWidth: 340 + 2 * Appearance.sizes.elevationMargin
     implicitHeight: mediaCard.implicitHeight + 2 * Appearance.sizes.elevationMargin
     clip: true
@@ -71,11 +62,11 @@ Item {
                 Image {
                     id: albumArt
                     anchors.fill: parent
-                    source: artworkResolver.displaySource
+                    source: MediaArtwork.displaySource
                     fillMode: Image.PreserveAspectCrop
                     asynchronous: true
                     cache: false
-                    visible: artworkResolver.ready && status === Image.Ready
+                    visible: MediaArtwork.ready && status === Image.Ready
 
                     layer.enabled: true
                     layer.effect: GE.OpacityMask {
@@ -93,7 +84,7 @@ Item {
                     text: "music_note"
                     iconSize: Appearance.font.pixelSize.huge
                     color: Appearance.colors.colSubtext
-                    visible: !artworkResolver.ready || albumArt.status !== Image.Ready
+                    visible: !MediaArtwork.ready || albumArt.status !== Image.Ready
                 }
             }
 
