@@ -326,7 +326,7 @@ AbstractWidget {
 
             RippleButton {
                 id: popoverBtn
-                visible: root.editPopoverContent !== null
+                visible: root._effectivePopover !== null
                 width: 32; height: 32
                 buttonRadius: Appearance.rounding.full
                 toggled: editPopoverPanel.visible
@@ -391,8 +391,8 @@ AbstractWidget {
             Loader {
                 id: popoverLoader
                 anchors.centerIn: parent
-                sourceComponent: root.editPopoverContent
-                active: editPopoverPanel.visible && root.editPopoverContent !== null
+                sourceComponent: root._effectivePopover
+                active: editPopoverPanel.visible && root._effectivePopover !== null
             }
         }
     }
@@ -594,8 +594,29 @@ AbstractWidget {
     }
 
     // ── Inline popover for quick controls ─────────────────────
-    // Override in subclasses to provide a per-widget quick-edit panel
+    // Override in subclasses to provide a per-widget quick-edit panel.
+    // If null and manifestConfigKeys is non-empty, an auto-generated popover is used.
     property Component editPopoverContent: null
+    // Manifest-declared config keys for auto-popover (set via setSource for custom widgets)
+    property var manifestConfigKeys: ({})
+    readonly property var _manifestKeyList: {
+        const keys = root.manifestConfigKeys;
+        if (!keys || typeof keys !== "object") return [];
+        return Object.keys(keys).map(k => ({ key: k, spec: keys[k] }));
+    }
+    // Effective popover: custom if provided, otherwise auto-generated from manifest
+    readonly property Component _effectivePopover: root.editPopoverContent ?? (root._manifestKeyList.length > 0 ? _autoPopoverComponent : null)
+
+    // Auto-generated popover from manifest configKeys (loaded as separate component)
+    property Component _autoPopoverComponent: _manifestKeyList.length > 0 ? _autoPopoverRef : null
+    Component {
+        id: _autoPopoverRef
+        ManifestPopover {
+            configEntryName: root.configEntryName
+            manifestKeys: root._manifestKeyList
+            readConfigKey: (key) => root._readConfigKey(key)
+        }
+    }
 
     // ── Resize handles system ─────────────────────────────────
     // Override in subclasses to enable resize in edit mode.

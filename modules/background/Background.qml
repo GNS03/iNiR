@@ -24,14 +24,7 @@ import qs.modules.background.widgets.systemMonitor
 import qs.modules.background.widgets.battery
 import "root:modules/common/functions/parallax.js" as ParallaxMath
 
-Variants {
-    id: root
-    model: Quickshell.screens
-
-    // Shared cache for magick identify results across all monitor instances.
-    // Avoids re-running the subprocess for previously-seen wallpapers.
-    property var _wallpaperSizeCache: ({})
-
+Scope {
     IpcHandler {
         target: "background"
         function toggleEditMode(): string {
@@ -39,6 +32,14 @@ Variants {
             return GlobalStates.widgetEditMode ? "edit mode on" : "edit mode off";
         }
     }
+
+    Variants {
+        id: root
+        model: Quickshell.screens
+
+        // Shared cache for magick identify results across all monitor instances.
+        // Avoids re-running the subprocess for previously-seen wallpapers.
+        property var _wallpaperSizeCache: ({})
 
     PanelWindow {
         id: bgRoot
@@ -1281,21 +1282,24 @@ Variants {
                                 color: CF.ColorUtils.applyAlpha(Appearance.colors.colOnLayer2, 0.12)
                             }
 
-                            // Open widget settings
+                            // Toggle widget manager panel
                             RippleButton {
                                 width: 36; height: 36
                                 buttonRadius: Appearance.rounding.full
+                                toggled: widgetManagerPanel.shown
                                 colBackground: "transparent"
                                 colBackgroundHover: CF.ColorUtils.applyAlpha(Appearance.colors.colOnLayer2, 0.08)
+                                colBackgroundToggled: CF.ColorUtils.applyAlpha(Appearance.colors.colPrimary, 0.16)
+                                colBackgroundToggledHover: CF.ColorUtils.applyAlpha(Appearance.colors.colPrimary, 0.24)
                                 colRipple: CF.ColorUtils.applyAlpha(Appearance.colors.colOnLayer2, 0.12)
-                                downAction: () => { GlobalStates.settingsOverlayOpen = true }
+                                downAction: () => { widgetManagerPanel.shown = !widgetManagerPanel.shown }
                                 contentItem: MaterialSymbol {
                                     anchors.centerIn: parent
-                                    text: "settings"
+                                    text: "add_circle"
                                     iconSize: 20
-                                    color: Appearance.colors.colOnLayer2
+                                    color: parent.toggled ? Appearance.colors.colPrimary : Appearance.colors.colOnLayer2
                                 }
-                                StyledToolTip { text: Translation.tr("Widget settings") }
+                                StyledToolTip { text: Translation.tr("Manage widgets") }
                             }
 
                             // Separator
@@ -1312,7 +1316,7 @@ Variants {
                                 colBackground: CF.ColorUtils.applyAlpha(Appearance.colors.colPrimary, 0.12)
                                 colBackgroundHover: CF.ColorUtils.applyAlpha(Appearance.colors.colPrimary, 0.20)
                                 colRipple: CF.ColorUtils.applyAlpha(Appearance.colors.colPrimary, 0.24)
-                                downAction: () => { GlobalStates.widgetEditMode = false }
+                                downAction: () => { widgetManagerPanel.shown = false; GlobalStates.widgetEditMode = false }
                                 contentItem: MaterialSymbol {
                                     anchors.centerIn: parent
                                     text: "check"
@@ -1323,6 +1327,23 @@ Variants {
                             }
                         }
                     }
+
+                    // ── Widget Manager Panel ─────────────────────────
+                    Loader {
+                        id: widgetManagerPanel
+                        property bool shown: false
+                        active: shown
+                        visible: shown
+                        z: 150
+                        anchors {
+                            right: parent.right
+                            bottom: editControlsBar.top
+                            bottomMargin: 12
+                            rightMargin: 24
+                        }
+                        sourceComponent: WidgetManagerPanel {}
+                    }
+
                 }
 
                 FadeLoader {
@@ -1406,18 +1427,34 @@ Variants {
                         id: customWidgetLoader
                         required property var modelData
                         required property int index
-                        active: Config.options?.background?.widgets?.custom?.[modelData.id]?.enable ?? true
+
+                        readonly property bool shown: Config.options?.background?.widgets?.custom?.[modelData.id]?.enable ?? true
+                        active: shown
+                        opacity: shown ? 1 : 0
+                        visible: opacity > 0
+                        Behavior on opacity {
+                            enabled: Appearance.animationsEnabled
+                            animation: NumberAnimation { duration: Appearance.animation.elementMoveFast.duration; easing.type: Appearance.animation.elementMoveFast.type; easing.bezierCurve: Appearance.animation.elementMoveFast.bezierCurve }
+                        }
 
                         // setSource passes required properties at construction time
                         function _load(): void {
-                            setSource(modelData.qmlPath, {
+                            const props = {
                                 widgetIndex: 6 + index,
                                 screenWidth: bgRoot.screen.width,
                                 screenHeight: bgRoot.screen.height,
                                 scaledScreenWidth: bgRoot.screen.width,
                                 scaledScreenHeight: bgRoot.screen.height,
                                 wallpaperScale: 1,
-                            });
+                            };
+                            // Pass manifest data for auto-popover and resize
+                            if (modelData.configKeys && Object.keys(modelData.configKeys).length > 0)
+                                props.manifestConfigKeys = modelData.configKeys;
+                            // Default to uniform resize via widgetScale for all custom widgets
+                            const axes = (modelData.resizableAxes && Object.keys(modelData.resizableAxes).length > 0)
+                                ? modelData.resizableAxes : { uniform: "widgetScale" };
+                            props.resizableAxes = axes;
+                            setSource(modelData.qmlPath, props);
                         }
                         onActiveChanged: if (active) _load()
                         Component.onCompleted: if (active) _load()
@@ -1432,5 +1469,6 @@ Variants {
 
             }
         }
+    }
     }
 }

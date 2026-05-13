@@ -79,12 +79,24 @@ Singleton {
             root.configChanged();
     }
 
+    // JsonAdapter doesn't populate property var inside nested JsonObjects on load.
+    // This manually syncs them from the raw JSON after adapter load/reload.
+    function _syncVarProperties(): void {
+        try {
+            const raw = JSON.parse(configFileView.text());
+            const customData = raw?.background?.widgets?.custom;
+            if (customData && typeof customData === "object")
+                configOptionsJsonAdapter.background.widgets.custom = customData;
+        } catch (e) {}
+    }
+
     Timer {
         id: fileReloadTimer
         interval: root.readWriteDelay
         repeat: false
         onTriggered: {
             configFileView.reload();
+            root._syncVarProperties();
         }
     }
 
@@ -104,7 +116,12 @@ Singleton {
         blockWrites: root.blockWrites
         onFileChanged: fileReloadTimer.restart()
         onAdapterUpdated: fileWriteTimer.restart()
-        onLoaded: root.ready = true
+        onLoaded: {
+            // Workaround: JsonAdapter doesn't populate property var inside nested JsonObjects.
+            // Manually sync custom widget data from the raw JSON.
+            root._syncVarProperties();
+            root.ready = true;
+        }
         onLoadFailed: error => {
             if (error == FileViewError.FileNotFound) {
                 console.log("[Config] File not found, creating new file.");
