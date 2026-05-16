@@ -1488,6 +1488,7 @@ Singleton {
                     property bool enableMedia: true
                     property bool enableSettings: true
                     property bool enablePackages: true
+                    property bool enableSetup: true
                     property bool enableCustom: true
                 }
             }
