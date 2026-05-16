@@ -1,7 +1,7 @@
 # Maintainer: snowarch
 
 pkgname=inir-shell
-pkgver=2.24.0
+pkgver=2.25.0
 pkgrel=1
 pkgdesc='iNiR shell payload, launcher, and user service'
 arch=(any)
@@ -39,6 +39,7 @@ depends=(
   slurp
   swayidle
   swaylock
+  wlsunset
   syntax-highlighting
   ttf-jetbrains-mono-nerd
   ttf-material-symbols-variable
@@ -66,6 +67,7 @@ optdepends=(
   'gowall-bin: wallpaper theme conversion and effects editor'
   'gum: setup TUI helpers'
   'hyprpicker: color picker support'
+  'kde-cli-tools: Dolphin Open With dialog (QT_QPA_PLATFORMTHEME=kde)'
   'imagemagick: image conversion helpers'
   'kconfig: KDE configuration integration'
   'kdialog: KDE dialog integration for scripts'
