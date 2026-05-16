@@ -18,8 +18,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Clipboard navigate mode**: keyboard navigation in the clipboard panel. HTML display cleanup, copy operation preserves cursor position. Also added HTML and Unicode sanitization helpers so pasted content doesn't inject garbage.
 - **Sidebar requested-widget navigation**: any component can now request a specific sidebar tab by type (e.g. `"notepad"`) through `GlobalStates.sidebarRightRequestedWidget` without reaching into Persistent state. Both sidebar layouts listen and switch accordingly. Bar notepad button uses this instead of hardcoded tab indices.
 - **Notepad context menu**: right-click context menu in the notepad widget, themed selection colors, and persistent selection so you don't lose your highlight when the sidebar loses focus.
-- **Cava configuration**: Settings UI for cava process parameters (sensitivity, bars, framerate, stereo) with live apply. Both ii and waffle settings families.
+- **Cava configuration**: Settings UI for cava process parameters (sensitivity, bars, framerate, stereo) with live apply. Both ii and waffle settings families. Cava colors now generated from the theme palette.
+- **Configurable wave visualizer opacity**: global wave opacity in Advanced Settings (cava section) + per-widget override in the desktop visualizer edit popover. Media player wave visualizers inherit the global value automatically.
 - **Settings UI for file paths**: screenshot/recording filename formats, wallpapers directory, and booru download paths now editable from Settings.
+- **Lock screen widget customization**: configurable widgets on the lock screen.
+- **Notepad tabs in sidebar**: right sidebar notepad now supports multiple tabs.
+- **Background widget auto-fade**: desktop widgets fade when compositor windows overlap them, keeping them unobtrusive during work.
+- **Widget edit mode polish**: scrim overlay, repainted grid canvas, zone occupancy indicators with widget icons and direction arrows, placement strategy badges on widget labels. Drag behavior fixed — release guard, zone snap removed (zones cover entire screen so auto-snap was always wrong).
 
 ### Changed
 - **Steam theming moved to Millennium**: Adwaita for Steam is deprecated; theming now goes through Millennium's Material-Theme plugin. Updated translations across all locales.
@@ -31,6 +36,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Dock shadow opacity**: per dark/light mode tuning (0.18/0.35) with spread reset for cleaner appearance.
 - **Quick Settings wallpaper section**: Transparency and Colors-only toggles now side-by-side, reducing vertical footprint so the wallpaper thumbnails are more prominent.
 - **Debug logging gated behind QS_DEBUG**: ~72 informational `console.log` calls across 29 files converted to a `_log()` helper that only prints when `QS_DEBUG=1`. Error and failure logs remain unconditional.
+- **Bar top-left icon defaults to distro logo**: the icon button now shows the detected distro logo instead of a generic symbol.
+- **Aurora and Angel default opacity/blur increased**: raised defaults for a more polished out-of-the-box look.
+- **Control panel weather**: location toggle replaced with a minimal clickable eye icon to match the adjacent refresh button aesthetic.
 
 ### Fixed
 - **Dock stale toplevel ghost entries**: NiriService window matching could produce false matches on zero-score entries, and `sortedToplevels` could contain stale compositor entries not present in live ToplevelManager. Both now guarded.
@@ -49,6 +57,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Translation generation hitting ARG_MAX** *(#140)*: `gemini-translate.sh` passed the full `en_US.json` (~228 KB) as a shell argument, exceeding the kernel's 128 KB per-argument limit. Refactored to use jq `--rawfile` and pipe payload to curl via stdin.
 - **Weather location leaked in logs**: city name and coordinates were logged in plaintext when `hideLocation` was off. Now always redacted regardless of the UI toggle — logs are persistent and can be shared accidentally.
 - **Cava settings UI showing non-functional options**: removed colorSource, gradientCount, barWidth, barSpacing, foreground, and background controls from both ii and waffle settings. These had no consumers — CavaProcess only passes sensitivity/bars/framerate/stereo to the cava process; visual parameters are per-widget by design.
+- **Cava config restart race**: `stop()` now waits for process exit before regenerating config and restarting — was the root cause of needing to toggle multiple times for changes to take effect.
+- **Lock screen battery percentage**: now shows correctly. Intel CPU temp sensor priority fixed.
+- **Notification popup lifetime**: fixed urgency comparison and added configurable `maxPopupLifetime`.
+- **Weather widget shape tooltips**: all tooltip variants were triggering at once instead of only the active shape.
+- **ConfigSelectionArray undefined assignment**: `onYChanged` could fire before children were populated, assigning `undefined` to a `bool`.
 
 ### Issues / PRs
 - Fixed [#140](https://github.com/snowarch/iNiR/issues/140), [#144](https://github.com/snowarch/iNiR/issues/144).
