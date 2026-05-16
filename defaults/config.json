@@ -576,7 +576,7 @@
         "showScrollHints": true,
         "leftScrollAction": "brightness",
         "rightScrollAction": "volume",
-        "topLeftIcon": "spark",
+        "topLeftIcon": "distro",
         "tray": {
             "filterPassive": true,
             "invertPinnedItems": true,
