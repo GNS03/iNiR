@@ -877,6 +877,57 @@ def _clean_legacy_extensions(fork_key: str) -> None:
             shutil.rmtree(legacy_dir, ignore_errors=True)
 
 
+def _ensure_extension_registered(fork_key: str, ext_dir: Path) -> None:
+    """Add our extension to extensions.json so Cursor/Windsurf load it.
+    These editors only load extensions listed in this registry; physical
+    presence in the directory is not enough.
+    """
+    registry = _get_ext_dir(fork_key) / "extensions.json"
+    entries = []
+    if registry.exists():
+        try:
+            with open(registry) as f:
+                entries = json.load(f)
+        except (json.JSONDecodeError, OSError):
+            entries = []
+
+    ext_id = f"inir.{THEME_EXTENSION_ID}"
+    for e in entries:
+        if e.get("identifier", {}).get("id") == ext_id:
+            return  # already registered
+
+    entries.append({
+        "identifier": {"id": ext_id},
+        "version": "1.0.0",
+        "location": {"$mid": 1, "path": str(ext_dir), "scheme": "file"},
+        "relativeLocation": THEME_EXTENSION_ID,
+    })
+    tmp = registry.with_suffix(".json.tmp")
+    with open(tmp, "w") as f:
+        json.dump(entries, f)
+    tmp.rename(registry)
+
+
+def _unregister_extension(fork_key: str) -> None:
+    """Remove our entry from extensions.json (companion to _ensure_extension_registered)."""
+    registry = _get_ext_dir(fork_key) / "extensions.json"
+    if not registry.exists():
+        return
+    try:
+        with open(registry) as f:
+            entries = json.load(f)
+    except (json.JSONDecodeError, OSError):
+        return
+    ext_id = f"inir.{THEME_EXTENSION_ID}"
+    filtered = [e for e in entries if e.get("identifier", {}).get("id") != ext_id]
+    if len(filtered) == len(entries):
+        return
+    tmp = registry.with_suffix(".json.tmp")
+    with open(tmp, "w") as f:
+        json.dump(filtered, f)
+    tmp.rename(registry)
+
+
 def generate_vscode_theme(colors_json_path, scss_path, settings_path, fork_key=""):
     """Install local extension and write theme file. _watch:true handles live reload."""
     try:
@@ -909,6 +960,9 @@ def generate_vscode_theme(colors_json_path, scss_path, settings_path, fork_key="
     pkg_path = ext_dir / "package.json"
     if not pkg_path.exists():
         _write_extension_manifest(ext_dir)
+
+    # Register in extensions.json (Cursor/Windsurf require this)
+    _ensure_extension_registered(fork_key, ext_dir)
 
     # Write theme file (atomic — _watch handles live reload)
     theme_path = ext_dir / "themes" / THEME_FILE_NAME
@@ -1008,11 +1062,12 @@ def strip_vscode_theme(settings_path: str, fork_key: str = "") -> bool:
     """Remove iNiR theme extension and settings.json entries."""
     import shutil
 
-    # Remove extension directory and legacy dirs if fork_key is known
+    # Remove extension directory, registry entry and legacy dirs if fork_key is known
     if fork_key:
         ext_dir = _get_ext_dir(fork_key) / THEME_EXTENSION_ID
         if ext_dir.exists():
             shutil.rmtree(ext_dir, ignore_errors=True)
+        _unregister_extension(fork_key)
         _clean_legacy_extensions(fork_key)
 
     settings_path = Path(settings_path)

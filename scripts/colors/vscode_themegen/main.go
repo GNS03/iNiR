@@ -218,6 +218,79 @@ func cleanLegacyExtensions(forkKey string) {
 	}
 }
 
+// ensureExtensionRegistered adds our extension to the editor's extensions.json
+// registry if absent. Editors like Cursor/Windsurf only load extensions listed
+// here; physical presence in the directory is not enough.
+func ensureExtensionRegistered(forkKey, extDir string) error {
+	extBase := getExtensionsDir(forkKey)
+	registryPath := filepath.Join(extBase, "extensions.json")
+
+	var entries []map[string]any
+	if data, err := os.ReadFile(registryPath); err == nil {
+		_ = json.Unmarshal(data, &entries)
+	}
+
+	extID := "inir." + themeExtensionID
+	for _, e := range entries {
+		ident, _ := e["identifier"].(map[string]any)
+		if id, _ := ident["id"].(string); id == extID {
+			return nil // already registered
+		}
+	}
+
+	entry := map[string]any{
+		"identifier":       map[string]any{"id": extID},
+		"version":          "1.0.0",
+		"location":         map[string]any{"$mid": float64(1), "path": extDir, "scheme": "file"},
+		"relativeLocation": themeExtensionID,
+	}
+	entries = append(entries, entry)
+
+	data, err := json.Marshal(entries)
+	if err != nil {
+		return err
+	}
+	tmp := registryPath + ".tmp"
+	if err := os.WriteFile(tmp, data, 0o644); err != nil {
+		return err
+	}
+	return os.Rename(tmp, registryPath)
+}
+
+// unregisterExtension removes our entry from extensions.json (companion to ensureExtensionRegistered)
+func unregisterExtension(forkKey string) {
+	registryPath := filepath.Join(getExtensionsDir(forkKey), "extensions.json")
+	data, err := os.ReadFile(registryPath)
+	if err != nil {
+		return
+	}
+	var entries []map[string]any
+	if err := json.Unmarshal(data, &entries); err != nil {
+		return
+	}
+	extID := "inir." + themeExtensionID
+	filtered := entries[:0]
+	for _, e := range entries {
+		ident, _ := e["identifier"].(map[string]any)
+		if id, _ := ident["id"].(string); id == extID {
+			continue
+		}
+		filtered = append(filtered, e)
+	}
+	if len(filtered) == len(entries) {
+		return
+	}
+	out, err := json.Marshal(filtered)
+	if err != nil {
+		return
+	}
+	tmp := registryPath + ".tmp"
+	if err := os.WriteFile(tmp, out, 0o644); err != nil {
+		return
+	}
+	os.Rename(tmp, registryPath)
+}
+
 func writeExtensionManifest(extDir string) error {
 	manifest := map[string]any{
 		"name":        themeExtensionID,
@@ -403,6 +476,11 @@ func generateThemeForFork(colorsPath, terminalJSONPath, scssPath, settingsPath, 
 		if err := writeExtensionManifest(extDir); err != nil {
 			return false, fmt.Errorf("failed to write extension manifest: %v", err)
 		}
+	}
+
+	// Register in extensions.json (Cursor/Windsurf require this; VS Code is more lenient)
+	if err := ensureExtensionRegistered(forkKey, extDir); err != nil {
+		fmt.Fprintf(os.Stderr, "  warn: extensions.json registration failed: %v\n", err)
 	}
 
 	// Write the theme file (atomic rename — _watch handles live reload)
@@ -625,13 +703,15 @@ func generateSemantic(colors, termColors map[string]string) map[string]string {
 
 // stripThemeForFork removes the iNiR extension and cleans settings.json
 func stripThemeForFork(settingsPath, forkKey string) bool {
-	// Remove the extension directory
+	// Remove the extension directory and registry entry
 	extDir := filepath.Join(getExtensionsDir(forkKey), themeExtensionID)
 	if dirExists(extDir) {
 		if err := os.RemoveAll(extDir); err != nil {
 			fmt.Fprintf(os.Stderr, "Failed to remove extension dir %s: %v\n", extDir, err)
 		}
 	}
+	unregisterExtension(forkKey)
+	cleanLegacyExtensions(forkKey)
 
 	// Clean settings.json
 	data, err := os.ReadFile(settingsPath)
