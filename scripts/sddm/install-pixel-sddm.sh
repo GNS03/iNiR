@@ -9,7 +9,11 @@ THEME_NAME="ii-pixel"
 THEME_SRC="${REPO_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}/dots/sddm/pixel"
 THEME_DIR="/usr/share/sddm/themes/${THEME_NAME}"
 SYNC_SCRIPT="${REPO_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}/scripts/sddm/sync-pixel-sddm.py"
-SDDM_CONF="/etc/sddm.conf.d/inir-theme.conf"
+# Use a high-priority drop-in name so SDDM's alphabetical merge picks our values
+# LAST and we win against KDE's kde_settings.conf or any other foreign drop-in.
+# Old name (legacy, pre-2.26): /etc/sddm.conf.d/inir-theme.conf — cleaned up below.
+SDDM_CONF="/etc/sddm.conf.d/99-inir-theme.conf"
+SDDM_CONF_LEGACY="/etc/sddm.conf.d/inir-theme.conf"
 AUTO_APPLY_MODE="${INIR_SDDM_AUTO_APPLY:-ask}" # ask|yes|no
 
 log_info() { echo -e "\033[0;36m[sddm] $*\033[0m"; }
@@ -43,9 +47,13 @@ elevate() {
 
 get_current_sddm_theme() {
     local from_dropin=""
-    if [[ -f "$SDDM_CONF" ]]; then
-        from_dropin=$(awk -F= '/^[[:space:]]*Current[[:space:]]*=/{gsub(/[[:space:]]/,"",$2); print $2; exit}' "$SDDM_CONF" 2>/dev/null || true)
-    fi
+    # Check new high-priority drop-in first; fall back to legacy name during migration.
+    for f in "$SDDM_CONF" "$SDDM_CONF_LEGACY"; do
+        if [[ -f "$f" ]]; then
+            from_dropin=$(awk -F= '/^[[:space:]]*Current[[:space:]]*=/{gsub(/[[:space:]]/,"",$2); print $2; exit}' "$f" 2>/dev/null || true)
+            [[ -n "$from_dropin" ]] && break
+        fi
+    done
     if [[ -n "$from_dropin" ]]; then
         echo "$from_dropin"
         return 0
@@ -163,26 +171,13 @@ import sys; sys.stdout.buffer.write(make_png())
     fi
 fi
 
-# Neutralize conflicting InputMethod=qtvirtualkeyboard in other sddm.conf.d files.
-# SDDM merges drop-ins alphabetically — a file sorting after ours can override InputMethod=.
-neutralize_conflicting_input_method() {
-    local conf_dir="/etc/sddm.conf.d"
-    [[ -d "$conf_dir" ]] || return 0
-
-    for f in "${conf_dir}"/*.conf; do
-        [[ -f "$f" ]] || continue
-        [[ "$(basename "$f")" == "$(basename "$SDDM_CONF")" ]] && continue
-        if grep -qiE '^\s*InputMethod\s*=\s*qtvirtualkeyboard' "$f" 2>/dev/null; then
-            log_warn "Removing conflicting InputMethod from $(basename "$f")"
-            elevate sed -i '/^\s*InputMethod\s*=\s*qtvirtualkeyboard/d' "$f"
-        fi
-    done
-
-    # Also check the main sddm.conf
-    if [[ -f /etc/sddm.conf ]] && grep -qiE '^\s*InputMethod\s*=\s*qtvirtualkeyboard' /etc/sddm.conf 2>/dev/null; then
-        log_warn "Removing conflicting InputMethod from /etc/sddm.conf"
-        elevate sed -i '/^\s*InputMethod\s*=\s*qtvirtualkeyboard/d' /etc/sddm.conf
-    fi
+# Migrate from the old SDDM_CONF filename (inir-theme.conf) to the new
+# alphabetical-last name (99-inir-theme.conf). Done idempotently: if the legacy
+# file exists and we own the new name's location, just remove the legacy one.
+migrate_legacy_sddm_conf() {
+    [[ -f "$SDDM_CONF_LEGACY" ]] || return 0
+    log_info "Removing legacy ${SDDM_CONF_LEGACY} (replaced by $(basename "$SDDM_CONF"))"
+    elevate rm -f "$SDDM_CONF_LEGACY"
 }
 
 # Configure SDDM to use this theme
@@ -204,13 +199,6 @@ if [[ "$current_conf" == "$desired_conf" ]]; then
 else
     if should_apply_theme; then
         log_info "Updating SDDM configuration (requires sudo)..."
-
-        # Remove any existing Current= line from /etc/sddm.conf to avoid conflicts
-        if [[ -f /etc/sddm.conf ]] && grep -q '^\s*Current\s*=' /etc/sddm.conf 2>/dev/null; then
-            log_info "Removing conflicting theme setting from /etc/sddm.conf..."
-            elevate sed -i '/^\s*Current\s*=/d' /etc/sddm.conf
-        fi
-
         elevate mkdir -p /etc/sddm.conf.d
         echo "$desired_conf" | elevate tee "${SDDM_CONF}" > /dev/null
         log_ok "SDDM configured (${SDDM_CONF})"
@@ -225,8 +213,9 @@ else
     fi
 fi
 
-# Clean up conflicting InputMethod settings from other config files
-neutralize_conflicting_input_method
+# Clean up legacy drop-in name (if user is migrating from pre-2.26 install).
+# Our new 99- prefixed file already wins by alphabetical merge order.
+migrate_legacy_sddm_conf
 
 # Run initial color sync now that files are in place
 log_info "Running initial color sync..."
