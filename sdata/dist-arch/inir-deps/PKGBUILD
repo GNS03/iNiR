@@ -18,7 +18,9 @@ license=(MIT)
 # so "clean orphans" won't remove them.
 depends=(
   #--- Quickshell + Qt6 runtime ---
-  quickshell
+  # Note: quickshell is NOT listed here because quickshell-git doesn't
+  # provide=(quickshell), causing pacman conflicts when switching variants.
+  # The installer handles quickshell installation separately.
   qt6-base
   qt6-declarative
   qt6-svg
@@ -151,6 +153,7 @@ depends=(
 # AUR / optional packages — listed here so pacman knows about them
 # but won't block install if missing.
 optdepends=(
+  'quickshell-git: Quickshell shell framework (required, install any variant)'
   'cava: audio visualizer for bar'
   'easyeffects: audio effects panel'
   'songrec: song recognition'
