@@ -28,7 +28,9 @@ Singleton {
         fileReloadTimer.stop();
         root._prepareCustomInject();
         root._writeInFlight = true;
-        root._writeDirectFromAdapter();
+        // Use mirror for flush — guaranteed to work, no onSaved dependency
+        root._writeMirrorToDisk();
+        root._writeInFlight = false;
     }
 
     function _applyNestedKey(nestedKey, value) {
@@ -240,36 +242,19 @@ Singleton {
             root.customWidgetData = root._cloneObject(root._customSnapshotForInject);
     }
 
-    // Write the in-memory JSON mirror to disk.
-    function _writeDirectFromAdapter(): void {
+    // Fallback: write the mirror directly when writeAdapter() doesn't emit onSaved.
+    function _writeMirrorToDisk(): void {
         try {
             let obj = root._jsonMirror;
-            if (!obj || Object.keys(obj).length === 0) {
-                console.warn("[Config] mirror is empty, skipping write");
-                root._writeInFlight = false;
-                return;
-            }
-            // Inject custom widget data
+            if (!obj || Object.keys(obj).length === 0) return;
             if (root._hasObjectKeys(root.customWidgetData)) {
                 if (!obj.background) obj.background = {};
                 if (!obj.background.widgets) obj.background.widgets = {};
                 obj.background.widgets.custom = root.customWidgetData;
             }
-            const newText = JSON.stringify(obj, null, 4);
-            configFileView.setText(newText);
-            // setText is synchronous — file is written when it returns.
-            // Don't wait for onSaved which may not fire reliably in QS 0.3.
-            root._writeInFlight = false;
-            if (root._pendingCustomInject) {
-                root._pendingCustomInject = false;
-                customInjectTimer.restart();
-            } else if (root._pendingWrite) {
-                root._pendingWrite = false;
-                fileWriteTimer.restart();
-            }
+            configFileView.setText(JSON.stringify(obj, null, 4));
         } catch (e) {
-            console.warn("[Config] write failed:", e.message);
-            root._writeInFlight = false;
+            console.warn("[Config] mirror write failed:", e.message);
         }
     }
 
@@ -320,11 +305,15 @@ Singleton {
             root._pendingWrite = false;
             root._writeInFlight = true;
             fileReloadTimer.stop();
-            root._writeDirectFromAdapter();
+            // Try writeAdapter first — it properly emits QObject property signals
+            // which 2476 consumers depend on via Config.options?.x bindings.
+            configFileView.writeAdapter();
+            writeFlightGuard.restart();
         }
     }
 
-    // Safety: if _writeInFlight gets stuck somehow, unstick after timeout.
+    // If writeAdapter doesn't emit onSaved within 2s (QS 0.3 dirty-detection
+    // edge case), fall back to writing the mirror directly.
     Timer {
         id: writeFlightGuard
         interval: 2000
@@ -332,6 +321,7 @@ Singleton {
         onTriggered: {
             if (root._writeInFlight) {
                 root._writeInFlight = false;
+                root._writeMirrorToDisk();
             }
         }
     }
@@ -356,9 +346,22 @@ Singleton {
         blockWrites: root.blockWrites
         onFileChanged: fileReloadTimer.restart()
         onSaved: {
-            // setText is treated as synchronous — _writeInFlight is cleared immediately
-            // after setText returns. onSaved is kept for compatibility but no logic depends on it.
             writeFlightGuard.stop();
+            root._writeInFlight = false;
+            if (root._pendingCustomInject) {
+                root._pendingCustomInject = false;
+                customInjectTimer.restart();
+                return;
+            }
+            if (root._pendingWrite) {
+                root._pendingWrite = false;
+                fileWriteTimer.restart();
+                return;
+            }
+            if (root._pendingReload) {
+                root._pendingReload = false;
+                fileReloadTimer.restart();
+            }
         }
         onLoaded: {
             // Initialize the in-memory JSON mirror from disk
