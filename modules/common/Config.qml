@@ -1669,6 +1669,12 @@ Singleton {
                     property int limit: 24
                     // Optional API key for NSFW & user-specific filters
                     property string apiKey: ""
+                    // Resolutions
+                    property string resolutions: "2560x1440,3840x2160"
+                    // Aspect ratios
+                    property string aspect_ratios: "16x9"
+                    // Blocked tags
+                    property list<string> blocked_tags: ["furry"]
                 }
                 // Anime Schedule tab - AniList API
                 property JsonObject animeSchedule: JsonObject {
