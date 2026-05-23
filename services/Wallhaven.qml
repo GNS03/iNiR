@@ -20,7 +20,7 @@ QtObject {
     function _log(...args): void {
         if (Quickshell.env("QS_DEBUG") === "1") console.log(...args);
     }
-    
+
     property Component wallhavenResponseComponent: BooruResponseData {}
 
     signal responseFinished()
@@ -452,9 +452,6 @@ QtObject {
     property string apiKey: Config.options?.sidebar?.wallhaven?.apiKey ?? ""
     property int defaultLimit: Config.options?.sidebar?.wallhaven?.limit ?? 24
     property bool allowNsfw: Persistent.states?.booru?.allowNsfw ?? false
-    property list<string> blocked_tags: Config.options?.sidebar?.wallhaven?.blocked_tags ?? []
-    property string resolutions: Config.options?.sidebar?.wallhaven?.resolutions ?? ""
-    property string aspect_ratios: Config.options?.sidebar?.wallhaven?.aspect_ratios ?? ""
     property string sortingMode: "date_added"
     property string topRange: "1M"
 
@@ -478,24 +475,9 @@ QtObject {
         var url = apiSearchEndpoint
         var params = []
 
-        if (tags[0]!=="?")
-
-            tags = (tags || []).concat(blocked_tags.map(t => "-" + t))
-        else
-            tags.shift()
-
-        console.log("tags: " + JSON.stringify(blocked_tags))
-
-        console.log("tags: " + JSON.stringify(tags))
-
         var q = (tags || []).join(" ").trim()
         if (q.length > 0)
             params.push("q=" + encodeURIComponent(q))
-
-        console.log("Tags: " + params)
-
-        params.push("resolutions=" + encodeURIComponent(resolutions))
-        params.push("ratios=" + encodeURIComponent(aspect_ratios))
 
         page = page || 1
         params.push("page=" + page)
@@ -503,7 +485,7 @@ QtObject {
         var effLimit = (limit && limit > 0) ? limit : defaultLimit
         params.push("per_page=" + effLimit)
 
-        params.push("categories=010")
+        params.push("categories=111")
 
         var purity = "100"
         if (nsfw && apiKey && apiKey.length > 0) {
@@ -526,7 +508,6 @@ QtObject {
     }
 
     function makeRequest(tags, nsfw, limit, page) {
-
         root.nowMs = Date.now()
         if (nsfw === undefined)
             nsfw = allowNsfw
